@@ -1,0 +1,3 @@
+﻿sku,price,quantity,supplier_id,status
+ROG_SKU-1001,19.99,25,supplier_a,active
+ROG_SKU-1002,29.50,10,supplier_a,backorder
