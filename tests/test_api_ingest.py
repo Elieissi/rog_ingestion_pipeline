@@ -1,4 +1,4 @@
-﻿from fastapi.testclient import TestClient
+from fastapi.testclient import TestClient
 
 from app.api import routes
 from app.main import app
@@ -54,6 +54,26 @@ def test_ingest_endpoint_bad_extension_returns_400(monkeypatch):
     assert response.status_code == 400
 
 
+def test_ingest_endpoint_internal_errors_are_sanitized(monkeypatch):
+    def fake_run_pipeline(file_path, supplier_id, record_type, cache):
+        raise RuntimeError("sensitive backend exception")
+
+    monkeypatch.setattr("app.api.routes.run_pipeline", fake_run_pipeline)
+
+    client = TestClient(app)
+    response = client.post(
+        "/ingest",
+        json={
+            "file_path": "data/incoming/supplier_a_products.csv",
+            "supplier_id": "supplier_a",
+            "record_type": "product",
+        },
+    )
+
+    assert response.status_code == 500
+    assert response.json()["detail"] == "Ingestion failed"
+
+
 def test_health_degraded_when_dependencies_down(monkeypatch):
     class BrokenCache:
         def ping(self):
@@ -76,3 +96,13 @@ def test_health_degraded_when_dependencies_down(monkeypatch):
     assert payload["status"] == "degraded"
     assert payload["db"] == "down"
     assert payload["redis"] == "down"
+
+
+def test_health_returns_503_when_cache_uninitialized():
+    routes.cache_instance = None
+
+    client = TestClient(app)
+    response = client.get("/health")
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Cache is unavailable"

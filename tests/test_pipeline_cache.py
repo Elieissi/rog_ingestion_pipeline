@@ -1,4 +1,4 @@
-﻿from contextlib import contextmanager
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
@@ -41,6 +41,7 @@ def test_pipeline_cache_skips_second_ingestion(monkeypatch, supplier_file: Path)
     def fake_get_db_session():
         yield DummySession()
 
+    monkeypatch.setattr("app.ingestion.pipeline.ALLOWED_INGEST_ROOT", supplier_file.parent.resolve())
     monkeypatch.setattr("app.ingestion.pipeline.get_db_session", fake_get_db_session)
     monkeypatch.setattr("app.ingestion.pipeline.upsert_products", lambda session, rows: len(rows))
 
@@ -73,6 +74,7 @@ def test_pipeline_reprocesses_when_hash_changes(monkeypatch, tmp_path: Path):
     def fake_get_db_session():
         yield DummySession()
 
+    monkeypatch.setattr("app.ingestion.pipeline.ALLOWED_INGEST_ROOT", file_path.parent.resolve())
     monkeypatch.setattr("app.ingestion.pipeline.get_db_session", fake_get_db_session)
     monkeypatch.setattr("app.ingestion.pipeline.upsert_products", lambda session, rows: len(rows))
 
@@ -82,3 +84,37 @@ def test_pipeline_reprocesses_when_hash_changes(monkeypatch, tmp_path: Path):
     assert first.skipped_cached is False
     assert second.skipped_cached is False
     assert second.processed == 1
+
+
+def test_pipeline_does_not_cache_all_rejected_records(monkeypatch, tmp_path: Path):
+    cache = FakeCache()
+    file_path = tmp_path / "supplier_products.csv"
+    file_path.write_text("sku,price,quantity,status\nBAD SKU,-1,0,active\n", encoding="utf-8")
+
+    @contextmanager
+    def fake_get_db_session():
+        yield DummySession()
+
+    monkeypatch.setattr("app.ingestion.pipeline.ALLOWED_INGEST_ROOT", file_path.parent.resolve())
+    monkeypatch.setattr("app.ingestion.pipeline.get_db_session", fake_get_db_session)
+    monkeypatch.setattr("app.ingestion.pipeline.upsert_products", lambda session, rows: len(rows))
+
+    first = run_pipeline(str(file_path), "supplier_a", "product", cache)
+    second = run_pipeline(str(file_path), "supplier_a", "product", cache)
+
+    assert first.rejected == 1
+    assert first.skipped_cached is False
+    assert second.skipped_cached is False
+
+def test_pipeline_rejects_file_outside_allowed_root(monkeypatch, tmp_path: Path):
+    cache = FakeCache()
+    allowed_root = tmp_path / "incoming"
+    allowed_root.mkdir()
+
+    outside_file = tmp_path / "outside.csv"
+    outside_file.write_text("sku,price,quantity,status\nSKU-1,10.50,5,active\n", encoding="utf-8")
+
+    monkeypatch.setattr("app.ingestion.pipeline.ALLOWED_INGEST_ROOT", allowed_root.resolve())
+
+    with pytest.raises(ValueError, match="file_path must be under data/incoming"):
+        run_pipeline(str(outside_file), "supplier_a", "product", cache)

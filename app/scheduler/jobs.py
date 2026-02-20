@@ -1,4 +1,4 @@
-﻿import logging
+import logging
 from pathlib import Path
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -14,16 +14,21 @@ SUPPORTED_EXTENSIONS = {".csv", ".json", ".txt"}
 
 
 def _resolve_feed_metadata(file_path: Path) -> tuple[str, str] | None:
-    stem_parts = file_path.stem.lower().split("_")
-    if len(stem_parts) < 2:
-        return None
+    stem = file_path.stem.lower()
+    suffix_map = {
+        "_order": "order",
+        "_orders": "order",
+        "_product": "product",
+        "_products": "product",
+    }
 
-    supplier_id = stem_parts[0]
-    tokens = set(stem_parts[1:])
-    if "order" in tokens or "orders" in tokens:
-        return supplier_id, "order"
-    if "product" in tokens or "products" in tokens:
-        return supplier_id, "product"
+    for suffix, record_type in suffix_map.items():
+        if not stem.endswith(suffix):
+            continue
+        supplier_id = stem[: -len(suffix)].rstrip("_")
+        if supplier_id:
+            return supplier_id, record_type
+
     return None
 
 
@@ -52,7 +57,7 @@ class SupplierSyncScheduler:
                     "scheduler.file_skipped",
                     extra={
                         "file_path": str(file_path),
-                        "reason": "filename must include supplier and product(s)|order(s) tokens",
+                        "reason": "filename must end with _product(s) or _order(s)",
                     },
                 )
                 continue

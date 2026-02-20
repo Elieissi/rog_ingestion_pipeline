@@ -1,12 +1,12 @@
-﻿from decimal import Decimal
+from decimal import Decimal
 
 KEY_ALIASES = {
-    "sku": {"sku", "item_sku", "sku_code"},
-    "quantity": {"quantity", "qty", "stock", "inventory"},
-    "supplier_id": {"supplier_id", "vendor", "supplier"},
-    "status": {"status", "state"},
-    "price": {"price", "unit_price", "cost"},
-    "order_id": {"order_id", "order", "order_number", "id"},
+    "sku": ("sku", "item_sku", "sku_code"),
+    "quantity": ("quantity", "qty", "stock", "inventory"),
+    "supplier_id": ("supplier_id", "vendor", "supplier"),
+    "status": ("status", "state"),
+    "price": ("price", "unit_price", "cost"),
+    "order_id": ("order_id", "order", "order_number", "id"),
 }
 
 
@@ -47,7 +47,7 @@ def normalize_record(record: dict, default_supplier_id: str, record_type: str) -
     if normalized.get("price") not in (None, ""):
         try:
             normalized["price"] = Decimal(str(normalized["price"]))
-        except Exception:
+        except (ArithmeticError, TypeError, ValueError):
             # Keep original value for downstream validation.
             pass
     elif record_type == "product":

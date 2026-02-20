@@ -1,4 +1,4 @@
-﻿from app.ingestion.normalizer import normalize_record, normalize_records
+from app.ingestion.normalizer import normalize_record, normalize_records
 
 
 def test_normalizer_maps_aliases_to_canonical_keys():
@@ -34,3 +34,20 @@ def test_normalizer_batch_uses_fallback_supplier():
     rows = [{"sku": "SKU-1", "inventory": "4", "status": "inactive", "price": "9.99"}]
     normalized = normalize_records(rows, supplier_id="fallback_supplier", record_type="product")
     assert normalized[0]["supplier_id"] == "fallback_supplier"
+
+
+def test_normalizer_uses_deterministic_alias_precedence():
+    row = {
+        "sku": "PRIMARY",
+        "item_sku": "SECONDARY",
+        "supplier_id": "supplier_primary",
+        "vendor": "supplier_secondary",
+        "quantity": "1",
+        "price": "4.00",
+        "status": "active",
+    }
+
+    normalized = normalize_record(row, default_supplier_id="fallback", record_type="product")
+
+    assert normalized["sku"] == "PRIMARY"
+    assert normalized["supplier_id"] == "supplier_primary"

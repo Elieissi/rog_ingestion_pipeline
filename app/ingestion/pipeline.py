@@ -1,4 +1,4 @@
-﻿import logging
+import logging
 import time
 import uuid
 from pathlib import Path
@@ -14,12 +14,27 @@ from app.models.pydantic_models import OrderIn, ProductIn, RunSummary
 
 
 logger = logging.getLogger(__name__)
+ALLOWED_INGEST_ROOT = Path("data/incoming").resolve()
+
+
+def _resolve_ingest_path(file_path: str) -> Path:
+    resolved_path = Path(file_path).resolve()
+
+    try:
+        resolved_path.relative_to(ALLOWED_INGEST_ROOT)
+    except ValueError as exc:
+        raise ValueError("file_path must be under data/incoming") from exc
+
+    if not resolved_path.exists():
+        raise FileNotFoundError(f"File not found: {file_path}")
+
+    return resolved_path
 
 
 def run_pipeline(file_path: str, supplier_id: str, record_type: str, cache: RedisCache) -> RunSummary:
     run_id = str(uuid.uuid4())
     start = time.time()
-    path = Path(file_path)
+    path = _resolve_ingest_path(file_path)
 
     logger.info(
         "pipeline.start",
@@ -30,9 +45,6 @@ def run_pipeline(file_path: str, supplier_id: str, record_type: str, cache: Redi
             "file_path": str(path),
         },
     )
-
-    if not path.exists():
-        raise FileNotFoundError(f"File not found: {file_path}")
 
     if record_type not in {"product", "order"}:
         raise ValueError("record_type must be 'product' or 'order'")
@@ -74,7 +86,8 @@ def run_pipeline(file_path: str, supplier_id: str, record_type: str, cache: Redi
             else:
                 inserted = upsert_orders(session, valid_rows)
 
-    cache.set(cache_key)
+    if valid_rows or (not normalized and not errors):
+        cache.set(cache_key)
 
     elapsed_ms = int((time.time() - start) * 1000)
     logger.info(

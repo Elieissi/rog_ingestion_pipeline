@@ -1,4 +1,6 @@
-﻿from fastapi import APIRouter, Depends, HTTPException
+import logging
+
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -10,11 +12,12 @@ from app.models.pydantic_models import HealthStatus, IngestRequest, RunSummary
 
 router = APIRouter()
 cache_instance: RedisCache | None = None
+logger = logging.getLogger(__name__)
 
 
 def get_cache() -> RedisCache:
     if cache_instance is None:
-        raise RuntimeError("Cache is not initialized")
+        raise HTTPException(status_code=503, detail="Cache is unavailable")
     return cache_instance
 
 
@@ -26,8 +29,9 @@ def ingest_feed(payload: IngestRequest, cache: RedisCache = Depends(get_cache)) 
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Ingestion failed: {exc}") from exc
+    except Exception:
+        logger.exception("ingest.failed")
+        raise HTTPException(status_code=500, detail="Ingestion failed")
 
 
 @router.get("/health", response_model=HealthStatus)
