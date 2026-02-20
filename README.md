@@ -2,7 +2,7 @@
 
 This project refactors the original `ldit_tool` into a production-style supplier data ingestion and normalization service aligned with ROG LLC's e-commerce operations.
 
-## Why this architecture fits ROG LLC
+
 ROG manages 1,000+ SKUs and processes weekly order volumes across multiple suppliers and channels (including TikTok Shop). The pipeline supports supplier feed variability, validates data before persistence, and uses caching + scheduled sync to reduce stale inventory risk and avoid unnecessary reprocessing.
 
 ## Architecture
